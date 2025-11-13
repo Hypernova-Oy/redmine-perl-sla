@@ -1,4 +1,16 @@
+#!/usr/bin/perl
+
+use Getopt::Long;
 use RedmineSLA;
+
+# Usage:
+# perl -I lib example.pl --project_id 1 --admin_org "Hypernova Oy" --start_date "$(date +%Y)-01-01 00:00:00"
+my @project_ids;
+my ($admin_org, $start_date);
+GetOptions ("project_id=i" => \@project_ids,
+            "admin_org=s"  => \$admin_org,
+            "start_date=s" => \$start_date,
+);
 
 my $sla = RedmineSLA->new(
     {
@@ -7,9 +19,9 @@ my $sla = RedmineSLA->new(
         port               => 3306,
         username           => "username",
         password           => "password",
-        project_ids        => [1],
-        admin_organization => "Hypernova Oy",
-        start_date         => "2025-01-01 00:00:00",
+        project_ids        => \@project_ids,
+        admin_organization => $admin_org,
+        start_date         => $start_date,
         business_hours     => {
             0 => {
                 Name  => "Sunday",
@@ -84,3 +96,5 @@ foreach my $issue ( reverse @{ $sla->get_sla_issues } ) {
 "$issue->{created_on}\t$subject\thttps://redmine.hypernova.fi/issues/$issue->{id}\t\t$response_hours_formatted\t$resolution_hours_formatted";
     print "\n";
 }
+
+$sla->update_wiki_report();
