@@ -296,6 +296,167 @@ sub is_status_sla {
     return 0;
 }
 
+sub update_wiki_report {
+    my $self = shift;
+
+    my $dbh = $self->{dbh};
+    my $sth = $dbh->prepare("SELECT id FROM wikis WHERE project_id=?;");
+    $sth->execute($self->{project_ids}->[0]);
+
+    my $wiki_id;
+    while ( my $row = $sth->fetchrow_hashref ) {
+        $wiki_id = $row->{id};
+    }
+
+    unless ($wiki_id) {
+        $sth = $dbh->prepare("INSERT INTO wikis (project_id, start_page, status) VALUES (?, ?, ?);");
+        $sth->execute($self->{project_ids}->[0], 'Wiki', 1);
+
+        $sth = $dbh->prepare("SELECT id FROM wikis WHERE project_id=?;");
+        $sth->execute($self->{project_ids}->[0]);
+
+        while ( my $row = $sth->fetchrow_hashref ) {
+            $wiki_id = $row->{id};
+        }
+
+        unless ($wiki_id) {
+            warn "Main wiki page not found and could not be created!";
+            return;
+        }
+    }
+
+    $sth = $dbh->prepare("SELECT id FROM wiki_pages WHERE wiki_id=?;");
+    $sth->execute($wiki_id);
+
+    my $wiki_page_id;
+    while ( my $row = $sth->fetchrow_hashref ) {
+        $wiki_page_id = $row->{id};
+    }
+
+    unless ($wiki_page_id) {
+        $sth = $dbh->prepare("INSERT INTO wiki_pages (wiki_id, title, protected) VALUES (?, ?, ?);");
+        $sth->execute($wiki_id, 'SLA', 0);
+
+        $sth = $dbh->prepare("SELECT id FROM wiki_pages WHERE wiki_id=?;");
+        $sth->execute($wiki_id);
+
+        while ( my $row = $sth->fetchrow_hashref ) {
+            $wiki_page_id = $row->{id};
+        }
+
+        unless ($wiki_page_id) {
+            warn "Wiki page not found and could not be created!";
+            return;
+        }
+    }
+
+
+    $sth = $dbh->prepare("SELECT id, text FROM wiki_contents WHERE page_id=?;");
+    $sth->execute($wiki_page_id);
+
+    my $wiki_contents_id;
+    my $wiki_contents;
+    while ( my $row = $sth->fetchrow_hashref ) {
+        $wiki_contents_id = $row->{id};
+        $wiki_contents    = $row->{text};
+    }
+
+    unless ($wiki_contents_id) {
+        $wiki_contents ||= <<"HERE";
+h1. Service Level Agreement
+
+<pre id="targets">
+DO NOT REMOVE
+target_response: _RESPONSE_
+target_resolution: _RESOLUTION_
+</pre>
+HERE
+        $sth = $dbh->prepare("INSERT INTO wiki_contents (page_id, author, text) VALUES (?, ?, ?);");
+        $sth->execute($wiki_page_id, $self->{admin_users}->[0], $wiki_contents);
+
+        $sth = $dbh->prepare("SELECT id, text FROM wiki_contents WHERE page_id=?;");
+        $sth->execute($wiki_page_id);
+
+        while ( my $row = $sth->fetchrow_hashref ) {
+            $wiki_contents_id = $row->{id};
+            $wiki_contents    = $row->{text};
+        }
+
+        unless ($wiki_contents_id) {
+            warn "Wiki contents page not found and could not be created!";
+            return;
+        } 
+    }
+    if ($wiki_contents =~ /_RES\w+_/) {
+        die "Please navigate to the project's SLA wiki page and set response and resolution values";
+    }
+
+    my $response;
+    if ($wiki_contents =~ /target_response: (\d+)/) {
+        $response = $1;
+    } else {
+        die "Could not find a value for 'target_response: \d+' from the wiki page!";
+    }
+    my $resolution;
+    if ($wiki_contents =~ /target_resolution: (\d+)/) {
+        $resolution = $1;
+    } else {
+        die "Could not find a value for 'target_resolution: \d+' from the wiki page!";
+    }
+
+    my $sla_issues = $self->get_sla_issues;
+
+    my $output = "h1. Service Level Agreement\n\n";
+    $output .= "Response exceeded   > ${response} hours\n";
+    $output .= "Resolution exceeded > ${resolution} hours\n";
+    $output .= "\n\n";
+
+    $output .= "|_.Date|_.Subject|_.URL|_.Response (h)|_.Resolution (h)|\n";
+    my $responded_in_time = 0;
+    my $resolved_in_time = 0;
+    foreach my $issue (reverse @{$sla_issues}) {
+        my $response_hours = $issue->{first_response_hours};
+        my $response_hours_formatted = $response_hours;
+        if ($response_hours >= $response) {
+            $response_hours_formatted = "%{color:red}${response_hours_formatted}%";
+        } else {
+            $responded_in_time++;
+        }
+
+        my $resolution_hours = $issue->{resolution_hours};
+        my $resolution_hours_formatted = $resolution_hours;
+        if ($resolution_hours >= $resolution) {
+            $resolution_hours_formatted = "%{color:red}${resolution_hours_formatted}%";
+        } else {
+            $resolved_in_time++;
+        }
+
+        my $subject = sprintf("%-37s", substr($issue->{subject}, 0, 36));
+
+        my $issue_id = $issue->{id};
+        $output .= "|$issue->{created_on}|$subject|\"$issue_id\":/issues/$issue_id|$response_hours_formatted|$resolution_hours_formatted|\n";
+    }
+
+    my $issues_count = scalar @$sla_issues;
+    my $response_percentage = sprintf( "%.2f", $responded_in_time/$issues_count*100 );
+    my $resolution_percentage = sprintf( "%.2f", $resolved_in_time/$issues_count*100 );
+    $output .= "\n\n";
+    $output .= '*Responded in time*: ' . $response_percentage . "%\n";
+    $output .= '*Resolved in time*: ' . $resolution_percentage . "%\n";
+    $output .= "\n\n";
+    $output .= <<"HERE";
+<pre id="targets">
+DO NOT REMOVE
+target_response: $response
+target_resolution: $resolution
+</pre>
+HERE
+    $sth = $dbh->prepare("UPDATE wiki_contents set text=? WHERE id=?;");
+    $sth->execute($output, $wiki_contents_id);
+
+    print "Done!\n";
+}
+
 sub bh {
     my $self  = shift;
     my $hours = shift;

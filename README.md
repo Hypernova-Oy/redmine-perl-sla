@@ -85,6 +85,14 @@ Date               	Subject                                 	URL                
 2025-06-02 09:20:10	instantly resolved                	https://redmine.hypernova.fi/issues/1    	       	5.66          	0.00          
 ```
 
+You can also generate a wiki report using
+
+```
+$sla->update_wiki_report();
+```
+
+This updates (or first, creates it) a wiki page called `SLA` to the project id of the first element of `project_ids` passed to `new()`.
+ 
 ### RedmineSLA->get_sla_issues
 
 Returns an arrayref of issues
