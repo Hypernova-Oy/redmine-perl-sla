@@ -215,7 +215,7 @@ sub get_sla_issues {
 
         }
         $issue->{resolution_hours} =
-          sprintf( "%.2f", $issue->{resolution_seconds} / 60 / 60 );
+          sprintf( "%.2f", ($issue->{first_response_seconds} + $issue->{resolution_seconds}) / 60 / 60 );
     }
 
     return \@issues;
