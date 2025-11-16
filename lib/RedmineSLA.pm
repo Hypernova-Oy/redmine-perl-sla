@@ -325,8 +325,8 @@ sub update_wiki_report {
         }
     }
 
-    $sth = $dbh->prepare("SELECT id FROM wiki_pages WHERE wiki_id=?;");
-    $sth->execute($wiki_id);
+    $sth = $dbh->prepare("SELECT id FROM wiki_pages WHERE wiki_id=? AND title=?;");
+    $sth->execute($wiki_id, 'SLA');
 
     my $wiki_page_id;
     while ( my $row = $sth->fetchrow_hashref ) {
@@ -334,11 +334,11 @@ sub update_wiki_report {
     }
 
     unless ($wiki_page_id) {
-        $sth = $dbh->prepare("INSERT INTO wiki_pages (wiki_id, title, protected) VALUES (?, ?, ?);");
+        $sth = $dbh->prepare("INSERT INTO wiki_pages (wiki_id, title, protected, created_on) VALUES (?, ?, ?, NOW());");
         $sth->execute($wiki_id, 'SLA', 0);
 
-        $sth = $dbh->prepare("SELECT id FROM wiki_pages WHERE wiki_id=?;");
-        $sth->execute($wiki_id);
+        $sth = $dbh->prepare("SELECT id FROM wiki_pages WHERE wiki_id=? AND title=?;");
+        $sth->execute($wiki_id, 'SLA');
 
         while ( my $row = $sth->fetchrow_hashref ) {
             $wiki_page_id = $row->{id};
@@ -371,8 +371,8 @@ target_response: _RESPONSE_
 target_resolution: _RESOLUTION_
 </pre>
 HERE
-        $sth = $dbh->prepare("INSERT INTO wiki_contents (page_id, author, text) VALUES (?, ?, ?);");
-        $sth->execute($wiki_page_id, $self->{admin_users}->[0], $wiki_contents);
+        $sth = $dbh->prepare("INSERT INTO wiki_contents (page_id, author_id, text, updated_on, version) VALUES (?, ?, ?, NOW(), ?);");
+        $sth->execute($wiki_page_id, $self->{admin_users}->[0], $wiki_contents, 1);
 
         $sth = $dbh->prepare("SELECT id, text FROM wiki_contents WHERE page_id=?;");
         $sth->execute($wiki_page_id);
