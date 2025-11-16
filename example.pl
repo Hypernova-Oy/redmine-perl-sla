@@ -4,10 +4,10 @@ use Getopt::Long;
 use RedmineSLA;
 
 # Usage:
-# perl -I lib example.pl --project_id 1 --admin_org "Hypernova Oy" --start_date "$(date +%Y)-01-01 00:00:00"
+# perl -I lib example.pl --project_id project_identifier_or_id --admin_org "Hypernova Oy" --start_date "$(date +%Y)-01-01 00:00:00"
 my @project_ids;
 my ($admin_org, $start_date);
-GetOptions ("project_id=i" => \@project_ids,
+GetOptions ("project_id=s" => \@project_ids,
             "admin_org=s"  => \$admin_org,
             "start_date=s" => \$start_date,
 );

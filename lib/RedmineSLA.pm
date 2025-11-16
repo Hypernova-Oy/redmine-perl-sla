@@ -28,7 +28,7 @@ sub new {
 # Custom Redmine field "Organization". Excpecting a string value (organization name), not id.
 # Users in this organization are considered admins.
     $self->{admin_organization} = $params->{admin_organization};
-    $self->{project_ids}        = $params->{project_ids};
+    $self->{project_ids}        = $self->get_project_ids($params->{project_ids});
     $self->{start_date}         = $params->{start_date};
     $self->{issue_statuses}     = $self->get_issue_statuses;
     $self->{issue_priorities}   = $self->get_issue_priorities;
@@ -255,6 +255,39 @@ sub get_issue_statuses {
     }
 
     return $statuses;
+}
+
+sub get_project_ids {
+    my ( $self, $project_ids ) = @_;
+
+    my @project_ids_numbered;
+    my $dbh = $self->{dbh};
+    my $sth = $dbh->prepare("SELECT id FROM projects WHERE identifier=?;");
+
+    foreach my $project_id (@$project_ids) {
+        if ($project_id =~ /^\d+$/) {
+            push( @project_ids_numbered, $project_id );
+            next;
+        }
+        $sth->execute($project_id);
+        while ( my $row = $sth->fetchrow_hashref ) {
+            if ($row->{id} =~ /^\d+$/) {
+                $project_id = $row->{id};
+                last;
+            } else {
+                warn "Project id '" . $row->{id} . "' for project '$project_id' is not numeric?!";
+            }
+        }
+        if ($project_id =~ /^\d+$/) {
+            push( @project_ids_numbered, $project_id );
+            next;
+        }
+        warn "Could not find project id with identifier '$project_id'!";
+    }
+
+    die "No valid project ids or identifiers given." if scalar @project_ids_numbered == 0;
+
+    return \@project_ids_numbered;
 }
 
 sub get_users_admin {
